@@ -1,16 +1,13 @@
 #!/bin/bash
+# =============================================================================
+# Complete fastq files download steps: Cancer vs Normal (Dog Mammary Tissue)
+# Author: Chiranjeevi Mishra | Auburn University | April 2026
+# ALL OUTPUTS SAVED TO "group_project" FOLDER 
+# =============================================================================
 
-######### FunGen Course Instructions ############
-## Purpose: The purpose of this script is to 
-## 	learn to use the scratch directory
-## 	learn to define variables
 ## 	download data from NCBI SRA using the SRAtoolkit and the SRA run IDs: https://www.ncbi.nlm.nih.gov/sra/docs/sradownload/
 ## 	use FASTQC to evaluate the quality of the data: https://www.bioinformatics.babraham.ac.uk/projects/fastqc/
 ## Download from SRA: Input Data: NA
-## 			Output: Downloaded read files, R1 and R2 files for each sample if paired-end data (FASTQ)
-## 	After you have this script in your home directory and you have made it executable using  "chmod +x [script name]", 
-## 	then run the script by using "run_script [script name]"
-## 	suggested paramenters are below to submit this script.
 ## 		queue: class
 ##		core: 1
 ##		time limit (HH:MM:SS): 04:00:00 
@@ -27,7 +24,7 @@ module load sra
 ## Replace the numbers in the brackets with Your specific information
   ## make variable for your ASC ID so the directories are automatically made in YOUR directory
   ## These are represented in the code by [#] replace these according to the examples provided
-MyID=aubclsf0047          ## Example: MyID=aubrmg001
+MyID=aubclsf0047          
 
   ## Make variable that represent YOUR working directory(WD) in scratch, your Raw data directory (DD) and the pre or postcleaned status (CS).
 DD=/scratch/${MyID}/Project/rawfile_1			## Example: DD=/scratch/${MyID}/PracticeRNAseq/RawData
