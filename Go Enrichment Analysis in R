@@ -1,0 +1,71 @@
+##Install and load the required packages
+install.packages("ggplot2")
+install.packages("tidyr")
+library(ggplot2)
+library(tidyr)
+
+
+##Enter Data
+go_data <- data.frame(
+  term = c(
+    "beta-adrenergic receptor activity",
+    "adrenergic receptor activity",
+    "G protein-coupled amine receptor activity",
+    "hormone binding",
+    "beta3-adrenergic receptor activity",
+    "leptin receptor binding",
+    "growth hormone receptor activity"
+  ),
+  fold_enrichment = c(100, 69.13, 29.33, 20.81, 100, 100, 100),
+  FDR = c(0.00255, 0.0152, 0.0117, 0.0309, 0.0214, 0.0256, 0.0365)
+)
+
+go_data$neg_log_FDR <- -log10(go_data$FDR)
+
+
+##Create Plot
+ggplot(go_data, aes(x = fold_enrichment, y = reorder(term, fold_enrichment))) +
+  geom_bar(stat = "identity", aes(fill = neg_log_FDR), color = "black", linewidth = 0.3) +
+  scale_fill_gradient(
+    low = "#74b8e8",
+    high = "#185FA5",
+    name = expression(-log[10](FDR))
+  ) +
+  geom_text(
+    aes(label = ifelse(fold_enrichment == 100, ">100", as.character(fold_enrichment))),
+    hjust = -0.1,
+    size = 3.2,
+    color = "black"
+  ) +
+  scale_x_continuous(
+    limits = c(0, 120),
+    expand = c(0, 0)
+  ) +
+  labs(
+    x = "Fold Enrichment",
+    y = NULL,
+    title = "GO Molecular Function Enrichment",
+    subtitle = expression(italic("Canis lupus familiaris") ~ "reference · FDR < 0.05")
+  ) +
+  theme_classic(base_size = 12) +
+  theme(
+    axis.text.y = element_text(size = 10, color = "black"),
+    axis.text.x = element_text(size = 10, color = "black"),
+    axis.title.x = element_text(size = 11, margin = margin(t = 8)),
+    plot.title = element_text(size = 13, face = "bold"),
+    plot.subtitle = element_text(size = 10, color = "gray40"),
+    legend.title = element_text(size = 10),
+    legend.text = element_text(size = 9),
+    legend.position = "right",
+    panel.grid.major.x = element_line(color = "gray90", linewidth = 0.4)
+  )
+
+
+##Save figure
+ggsave(
+  "GO_enrichment_plot.png",
+  width = 8,
+  height = 5,
+  dpi = 300,
+  bg = "white"
+)
