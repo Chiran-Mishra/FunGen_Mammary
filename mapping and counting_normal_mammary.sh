@@ -1,34 +1,36 @@
 #!/bin/bash
- 
-######### FunGen Course Instructions ############
-## Purpose: The purpose of this script is to 
-##    Use HiSat2 to index your reference genome and then map your cleaned (paired) reads to the indexed reference. If you have a large genome, this will require a lot more resources then listed here, such as the large queue with 1 core and 120gb. You may want to do the indexing as a seperate script.
-##              First need to use gffread to convert annotation file from .gff3 to .gft format.
-##              Use Stringtie to count the reads mapped to genes and transcripts, defined in this case by the genome annotation file
-##              use the python script to take the Stringtie results to make two counts matricies, one at the gene level and one at the transcript level
-## HiSat2  Indexing   InPut: Reference genome file (.fasta), and annotation file (.gff3) (Optional)
-##                    Output: Indexed genome 
-## HiSat2 Mapping     Input: Cleaned read files, paired (.fastq); Indexed genome
-##                    Output: Alignment .sam files  
-## Samtools  Convert .sam to .bam and sort          Input: Alignment files,  .sam
-##                                                  Output: Sorted  .bam files
-## Stringtie  Counting reads  Input: sorted .bam file
-##                            Output:  Directories of counts files for Ballgown (R program for DGE)
-##              prepDE.py3    Python script to create a counts matrics from the Stringtie output.  Inputs: Directory from Stringtie
-##                                                                                                Output:  .csv files of counts matrix
-## For running the script on the Alabama Super Computer.
-##  For more information: https://hpcdocs.asc.edu/content/slurm-queue-system
-##  After you have this script in your home directory and you have made it executable using  "chmod +x [script name]", 
-##  then run the script by using "run_script [script name]"
-##  suggested paramenters are below to submit this script.
-##    queue: class or medium
-##    core: 6
-##    time limit (HH:MM:SS): 04:00:00 
-##    Memory: 12gb
-##    
-###############################################
+# =============================================================================
+# Script: HISAT2 Mapping and StringTie Quantification
+# Project: Canine Mammary Tumor RNA-seq Analysis
+# Author: Chiranjeevi Mishra | Auburn University | April 2026
+#
+# Description:
+# This script maps cleaned paired-end RNA-seq reads to the canFam6 reference
+# genome using HISAT2. It then converts SAM files to sorted BAM files using
+# Samtools and quantifies gene/transcript expression using StringTie.
+# Finally, prepDE.py3 is used to generate gene and transcript count matrices.
+#
+# Input:
+#   - Cleaned paired-end FASTQ files
+#   - canFam6 reference genome FASTA file
+#   - canFam6 GTF annotation file
+#
+# Output:
+#   - SAM alignment files
+#   - Sorted BAM files
+#   - Mapping statistics files
+#   - StringTie output folders
+#   - Gene and transcript count matrices
+#
+# HPC Resources:
+#   - Queue: class or medium
+#   - CPUs: 6
+#   - Memory: 12 GB
+#   - Walltime: 04:00:00
+#   - Run on: asax
+# =============================================================================
 
-#### Load all the programs you are going to use in this script.
+# Load required modules
 source /apps/profiles/modules_asax.sh.dyn
 module load hisat2/2.2.0
 module load stringtie/2.2.1
@@ -37,106 +39,76 @@ module load python/3.10.8-zimemtc
 module load samtools
 module load bcftools
 module load gffread
-#module load gffcompare
 
-
-#  Set the stack size to unlimited
+# Set stack size to unlimited and echo commands to log file
 ulimit -s unlimited
-
-# Turn echo on so all commands are echoed in the output log
 set -x
 
-##########  Define variables and make directories
-## Replace the numbers in the brackets with Your specific information
-  ## make variable for your ASC ID so the directories are automatically made in YOUR directory
-  ## Replace the [#] with paths to define these variable
-MyID=aubclsf0047         ## Example: MyID=aubrmg001
+# Define variables
+MyID=aubclsf0047
+WD=/scratch/${MyID}/Project/mapping_combine
+CD=/scratch/${MyID}/Project/Clean_Combine
+REFD=/scratch/${MyID}/Project/canFam6
+MAPD=/scratch/${MyID}/Project/mapping_combine/Map_HiSat2
+COUNTSD=/scratch/${MyID}/Project/mapping_combine/Counts_StringTie
+RESULTSD=/home/${MyID}/Project/mapping_combine/Counts_H_S
+REF=canFam6
 
-WD=/scratch/$MyID/Project/mapping_combine                      ## Example:/scratch/$MyID/PracticeRNAseq  
-CD=/scratch/$MyID/Project/Clean_Combine             ## Example:/scratch/$MyID/PracticeRNAseq/CleanData   #   *** This is where the cleaned paired files are located from the last script
-REFD=/scratch/$MyID/Project/canFam6    ## Example:/scratch/$MyID/PracticeRNAseq/DaphniaRefGenome    # this directory contains the indexed reference genome for Daphnia
-MAPD=/scratch/$MyID/Project/mapping_combine/Map_HiSat2           ## Example:/scratch/$MyID/PracticeRNAseq/Map_HiSat2      #
-COUNTSD=/scratch/$MyID/Project/mapping_combine/Counts_StringTie       ## Example:/scratch/$MyID/PracticeRNAseq/Counts_StringTie
-RESULTSD=/home/$MyID/Project/mapping_combine/Counts_H_S          ## Example:/home/aubtss/PracticeRNAseq/Counts_H_S
+# Create output directories
+mkdir -p ${REFD}
+mkdir -p ${MAPD}
+mkdir -p ${COUNTSD}
+mkdir -p ${RESULTSD}
 
-REF=canFam6            ## This is what the "easy name" will be for the genome reference
+# Prepare HISAT2 reference index
+cd ${REFD}
 
-## Make the directories and all subdirectories defined by the variables above
-## CHECK if the parent/child directories exist - if they do REMOVE the -p
-mkdir -p $REFD
-mkdir -p $MAPD
-mkdir -p $COUNTSD
-mkdir -p $RESULTSD
-
-##################  Prepare the Reference Index for mapping with HiSat2   #############################
-cd $REFD
-### Copy the reference genome (.fasta) and the annotation file (.gff3) to this REFD directory.
-
-###  Identify exons and splice sites on the reference genome
-#gffread ${REF}.gff3 -T -o ${REF}.gtf               ## gffread converts the annotation file from .gff3 to .gtf formate for HiSat2 to use.
 hisat2_extract_splice_sites.py ${REF}.gtf > ${REF}.ss
 hisat2_extract_exons.py ${REF}.gtf > ${REF}.exon
 
-#### Create a HISAT2 index for the reference genome. NOTE every mapping program will need to build a its own index.
 hisat2-build --ss ${REF}.ss --exon ${REF}.exon ${REF}.fa canFam6_index
 
-########################  Map and Count the Data using HiSAT2 and StringTie  ########################
+# Generate list of sample IDs from cleaned paired FASTQ files
+cd ${CD}
+ls *.fastq | cut -d "_" -f 1 | sort | uniq > list
 
-# Move to the data directory
-cd ${CD}  #### This is where our clean paired reads are located.
-## Create list of fastq files to map.    Example file format of your cleaned reads file names: SRR629651_1_paired.fastq SRR629651_2_paired.fastq
-## grab all fastq files, cut on the underscore, use only the first of the cuts, sort, use unique put in list
-ls | grep ".fastq" |cut -d "_" -f 1| sort | uniq > list    #should list Example: SRR629651
-
-## Move to the directory for mapping
+# Move sample list to mapping directory
+mv list ${MAPD}
 cd ${MAPD}
 
-## move the list of unique ids from the original files to map
-mv ${CD}/list  .
-
-## process the samples in the list, one by one using a while loop
-while read i;
+# Map reads, process BAM files, and quantify expression
+while read i
 do
-  ## HiSat2 is the mapping program
-  ##  -p indicates number of processors, --dta reports alignments for StringTie --rf is the read orientation
-   hisat2 -p 6 --dta --phred33       \
-    -x "${REFD}"/canFam6_index       \
-    -1 "${CD}"/"$i"_1_paired.fastq  -2 "${CD}"/"$i"_2_paired.fastq      \
-    -S "$i".sam
+    hisat2 -p 6 --dta --phred33 \
+    -x ${REFD}/canFam6_index \
+    -1 ${CD}/${i}_1_paired.fastq \
+    -2 ${CD}/${i}_2_paired.fastq \
+    -S ${i}.sam
 
-    ### view: convert the SAM file into a BAM file  -bS: BAM is the binary format corresponding to the SAM text format.
-    ### sort: convert the BAM file to a sorted BAM file.
-    ### Example Input: SRR629651.sam; Output: SRR629651_sorted.bam
-  samtools view -@ 6 -bS "$i".sam > "$i".bam
+    samtools view -@ 6 -bS ${i}.sam > ${i}.bam
 
-    ###  This is sorting the bam, using 6 threads, and producing a .bam file that includes the word 'sorted' in the name
-  samtools sort -@ 6  "$i".bam  -o  "$i"_sorted.bam
+    samtools sort -@ 6 ${i}.bam -o ${i}_sorted.bam
 
-    ### Index the BAM and get mapping statistics, and put them in a text file for us to look at.
-  samtools flagstat   "$i"_sorted.bam   > "$i"_Stats.txt
+    samtools flagstat ${i}_sorted.bam > ${i}_Stats.txt
 
-  ### Stringtie is the program that counts the reads that are mapped to each gene, exon, transcript model. 
-  ### The output from StringTie are counts folders in a directory that is ready to bring into the R program Ballgown to 
-  ### Original: This will make transcripts using the reference geneome as a guide for each sorted.bam
-  ### eAB options: This will run stringtie once and  ONLY use the Ref annotation for counting readsto genes and exons 
-  
-mkdir "${COUNTSD}"/"$i"
-stringtie -p 6 -e -B -G  "${REFD}"/"${REF}".gtf -o "${COUNTSD}"/"$i"/"$i".gtf -l "$i"   "${MAPD}"/"$i"_sorted.bam
+    mkdir -p ${COUNTSD}/${i}
 
-done<list
+    stringtie -p 6 -e -B \
+    -G ${REFD}/${REF}.gtf \
+    -o ${COUNTSD}/${i}/${i}.gtf \
+    -l ${i} \
+    ${MAPD}/${i}_sorted.bam
 
-#####################  Copy Results to home Directory.  These will be the files you want to bring back to your computer.
-### these are your stats files from Samtools
+done < list
+
+# Copy mapping statistics to results directory
 cp *.txt ${RESULTSD}
 
-### The prepDE.py3 is a python script that converts the files in your ballgown folder to a count matrix. 
- ## Move to the counts directory
+# Generate count matrices using prepDE.py3
 cd ${COUNTSD}
- ## run the python script prepDE.py3 to prepare you data for downstream analysis.
 cp /home/${MyID}/graze_class/prepDE.py3 .
 
- prepDE.py3 -i ${COUNTSD}
+python prepDE.py3 -i ${COUNTSD}
 
-### copy the final results files (the count matricies that are .csv) to your home directory. 
+# Copy final count matrices to results directory
 cp *.csv ${RESULTSD}
-## move these results files to your personal computer for downstream statistical analyses in R studio.
