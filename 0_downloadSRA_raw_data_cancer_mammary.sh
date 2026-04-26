@@ -1,6 +1,6 @@
 #!/bin/bash
 # =============================================================================
-# Complete fastq files download steps: Cancer vs Normal (Dog Mammary Tissue)
+# Complete fastq files download steps: Cancer vs Normal (Dog Cancer Mammary Tissue)
 # Author: Chiranjeevi Mishra | Auburn University | April 2026
 # ALL OUTPUTS SAVED TO "group_project" FOLDER 
 # =============================================================================
@@ -42,41 +42,13 @@ cd ${DD}
 	## -I 	Append read id after spot id as 'accession.spot.readid' on defline.
 	## --split-files splits the files into R1 and R2 (forward reads, reverse reads)
 
-## These samples are from Bioproject PRJNA437447. An experiment on Daphnia pulex, 5 samples on ad lib feed, 5 samples on caloric restriction diet
-## https://www.ncbi.nlm.nih.gov/bioproject?LinkName=sra_bioproject&from_uid=5206312
-## For class only do the 6 that you are assigned, delete the other 4 from this list
-
 ## We must run vdb-config to force creation of the default config file, otherwise we will get an error. This is a 'hack'. 
 
 vdb-config --interactive > /dev/null 2>&1 <<EOF
 q
 EOF
 
-#fastq-dump -F --split-files SRR7819731
-#fastq-dump -F --split-files SRR7819736
-#fastq-dump -F --split-files SRR7819741
-#fastq-dump -F --split-files SRR7819742
-#fastq-dump -F --split-files SRR7819752
-#fastq-dump -F --split-files SRR7819755
-#fastq-dump -F --split-files SRR7819756
-#fastq-dump -F --split-files SRR7819758
-#fastq-dump -F --split-files SRR7819760
-#fastq-dump -F --split-files SRR7819765
-#fastq-dump -F --split-files SRR7819768
-#fastq-dump -F --split-files SRR7819780
-#fastq-dump -F --split-files SRR7819787
-#fastq-dump -F --split-files SRR7819790
-#fastq-dump -F --split-files SRR7819796
-#fastq-dump -F --split-files SRR7819797
-#fastq-dump -F --split-files SRR7819801
-#fastq-dump -F --split-files SRR7819803
-#fastq-dump -F --split-files SRR7819807
-#fastq-dump -F --split-files SRR7819812
-#fastq-dump -F --split-files SRR7819813
-#fastq-dump -F --split-files SRR7819830
-#fastq-dump -F --split-files SRR7819831
-#fastq-dump -F --split-files SRR7819834
-#fastq-dump -F --split-files SRR7819836
+
 fastq-dump -F --split-files SRR7819851
 fastq-dump -F --split-files SRR7819863
 fastq-dump -F --split-files SRR7819867
@@ -87,19 +59,6 @@ fastq-dump -F --split-files SRR7819875
 fastq-dump -F --split-files SRR7819885
 fastq-dump -F --split-files SRR7819891
 fastq-dump -F --split-files SRR7819893
-#fastq-dump -F --split-files SRR7819897
-#fastq-dump -F --split-files SRR7819918
-#fastq-dump -F --split-files SRR7819922
-#fastq-dump -F --split-files SRR7819926
-#fastq-dump -F --split-files SRR7819929
-#fastq-dump -F --split-files SRR7819932
-#fastq-dump -F --split-files SRR7819934
-#fastq-dump -F --split-files SRR7819936
-#fastq-dump -F --split-files SRR7819937
-#fastq-dump -F --split-files SRR7819942
-#fastq-dump -F --split-files SRR7819943
-#fastq-dump -F --split-files SRR7819944
-#fastq-dump -F --split-files SRR7819946
 
 ##### Extra ####
 ## If you are downloading data from a sequencing company instead of NCBI, using wget for example, then calculate the md5sum values of all the files in the folder (./*), and read into a text file.
