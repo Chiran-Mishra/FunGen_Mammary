@@ -1,143 +1,72 @@
-!/bin/bash
- 
-######### FunGen Course Instructions ############
-## Purpose: The purpose of this script is to 
-##    Use HiSat2 to index your reference genome and then map your cleaned (paired) reads to the indexed reference. If you have a large genome, this will require a lot more resources then listed here, such as the large queue with 1 core and 1>
-##              First need to use gffread to convert annotation file from .gff3 to .gft format.
-##              Use Stringtie to count the reads mapped to genes and transcripts, defined in this case by the genome annotation file
-##              use the python script to take the Stringtie results to make two counts matricies, one at the gene level and one at the transcript level
-## HiSat2  Indexing   InPut: Reference genome file (.fasta), and annotation file (.gff3) (Optional)
-##                    Output: Indexed genome 
-## HiSat2 Mapping     Input: Cleaned read files, paired (.fastq); Indexed genome
-##                    Output: Alignment .sam files  
-## Samtools  Convert .sam to .bam and sort          Input: Alignment files,  .sam
-##                                                  Output: Sorted  .bam files
-## Stringtie  Counting reads  Input: sorted .bam file
-##                            Output:  Directories of counts files for Ballgown (R program for DGE)
-##              prepDE.py3    Python script to create a counts matrics from the Stringtie output.  Inputs: Directory from Stringtie
-##                                                                                                Output:  .csv files of counts matrix
-## For running the script on the Alabama Super Computer.
-##  For more information: https://hpcdocs.asc.edu/content/slurm-queue-system
-##  After you have this script in your home directory and you have made it executable using  "chmod +x [script name]", 
-##  then run the script by using "run_script [script name]"
-##  suggested paramenters are below to submit this script.
-##    queue: class or medium
-##    core: 6
-##    time limit (HH:MM:SS): 04:00:00 
-##    Memory: 12gb
-##    
-###############################################
+#!/bin/bash
+# =============================================================================
+# Script: Read Trimming and Post-clean Quality Assessment (Cancer Samples)
+# Project: Canine Mammary Tumor RNA-seq Analysis
+# Author: Chiranjeevi Mishra | Auburn University | April 2026
+#
+# Description:
+# This script performs adapter trimming and quality filtering of paired-end
+# RNA-seq reads using Trimmomatic, followed by quality assessment of the
+# cleaned reads using FastQC.
+#
+# Input:
+#   - Raw paired-end FASTQ files (R1 and R2)
+#   - Adapter file (AdaptersToTrim_All.fa)
+#
+# Output:
+#   - Trimmed paired and unpaired FASTQ files
+#   - FastQC reports for cleaned reads
+#   - Compressed tarball of FastQC results
+#
+# HPC Resources:
+#   - Queue: medium
+#   - CPUs: 6
+#   - Memory: 12 GB
+#   - Walltime: 02:00:00
+#   - Run on: asax
+# =============================================================================
 
-#### Load all the programs you are going to use in this script.
+# Load required modules
 source /apps/profiles/modules_asax.sh.dyn
-module load hisat2/2.2.0
-module load stringtie/2.2.1
-module load gcc/9.4.0
-module load python/3.10.8-zimemtc
-module load samtools
-module load bcftools
-module load gffread
-#module load gffcompare
+module load trimmomatic/0.39
+module load fastqc/0.10.1
 
+# Define variables
+MyID=aubclsf0047
+WD=/scratch/${MyID}/Project
+DD=/scratch/${MyID}/Project/rawfile_1
+CD=/scratch/${MyID}/Project/CleanData_Cancer
+PCQ=PostCleanQuality_1
 
-#  Set the stack size to unlimited
-ulimit -s unlimited
+# Create output directories
+mkdir -p ${CD}
+mkdir -p ${WD}/${PCQ}
 
-# Turn echo on so all commands are echoed in the output log
-set -x
+# Move to raw data directory
+cd ${DD}
 
-##########  Define variables and make directories
-## Replace the numbers in the brackets with Your specific information
-  ## make variable for your ASC ID so the directories are automatically made in YOUR directory
-  ## Replace the [#] with paths to define these variable
-MyID=aubclsf0047         ## Example: MyID=aubrmg001
+# Generate list of sample IDs
+ls *.fastq | cut -d "_" -f 1 | sort | uniq > list
 
-WD=/scratch/$MyID/Project/mapping_cancer                      ## Example:/scratch/$MyID/PracticeRNAseq  
-CD=/scratch/$MyID/Project/CleanData_Cancer             ## Example:/scratch/$MyID/PracticeRNAseq/CleanData   #   *** This is where the cleaned paired files are located from the last script
-REFD=/scratch/$MyID/Project/canFam6    ## Example:/scratch/$MyID/PracticeRNAseq/DaphniaRefGenome    # this directory contains the indexed reference genome for Daphnia
-MAPD=/scratch/$MyID/Project/mapping_cancer/Map_HiSat2           ## Example:/scratch/$MyID/PracticeRNAseq/Map_HiSat2      #
-COUNTSD=/scratch/$MyID/Project/mapping_cancer/Counts_StringTie       ## Example:/scratch/$MyID/PracticeRNAseq/Counts_StringTie
-RESULTSD=/home/$MyID/Project/mapping_cancer/Counts_H_S          ## Example:/home/aubtss/PracticeRNAseq/Counts_H_S
+# Copy adapter file
+cp /home/${MyID}/graze_class/AdaptersToTrim_All.fa .
 
-REF=canFam6            ## This is what the "easy name" will be for the genome reference
-
-## Make the directories and all subdirectories defined by the variables above
-## CHECK if the parent/child directories exist - if they do REMOVE the -p
-mkdir -p $REFD
-mkdir -p $MAPD
-mkdir -p $COUNTSD
-mkdir -p $RESULTSD
-
-
-
-##################  Prepare the Reference Index for mapping with HiSat2   #############################
-cd $REFD
-### Copy the reference genome (.fasta) and the annotation file (.gff3) to this REFD directory.
-
-###  Identify exons and splice sites on the reference genome
-#gffread ${REF}.gff3 -T -o ${REF}.gtf               ## gffread converts the annotation file from .gff3 to .gtf formate for HiSat2 to use.
-hisat2_extract_splice_sites.py ${REF}.gtf > ${REF}.ss
-hisat2_extract_exons.py ${REF}.gtf > ${REF}.exon
-
-#### Create a HISAT2 index for the reference genome. NOTE every mapping program will need to build a its own index.
-hisat2-build --ss ${REF}.ss --exon ${REF}.exon ${REF}.fa canFam6_index
-
-########################  Map and Count the Data using HiSAT2 and StringTie  ########################
-
-# Move to the data directory
-cd ${CD}  #### This is where our clean paired reads are located.
-## Create list of fastq files to map.    Example file format of your cleaned reads file names: SRR629651_1_paired.fastq SRR629651_2_paired.fastq
-## grab all fastq files, cut on the underscore, use only the first of the cuts, sort, use unique put in list
-ls | grep ".fastq" |cut -d "_" -f 1| sort | uniq > list    #should list Example: SRR629651
-
-## Move to the directory for mapping
-cd ${MAPD}
-
-## move the list of unique ids from the original files to map
-mv ${CD}/list  .
-
-## process the samples in the list, one by one using a while loop
-while read i;
+# Run Trimmomatic + FastQC
+while read i
 do
-  ## HiSat2 is the mapping program
-  ##  -p indicates number of processors, --dta reports alignments for StringTie --rf is the read orientation
-   hisat2 -p 6 --dta --phred33       \
-    -x "${REFD}"/canFam6_index       \
-    -1 "${CD}"/"$i"_1_paired.fastq  -2 "${CD}"/"$i"_2_paired.fastq	\
-    -S "$i".sam
+    java -jar /apps/x86-64/apps/spack_0.19.1/spack/opt/spack/linux-rocky8-zen3/gcc-11.3.0/trimmomatic-0.39-iu723m2xenra563gozbob6ansjnxmnfp/bin/trimmomatic-0.39.jar \
+    PE -threads 6 -phred33 \
+    ${i}_1.fastq ${i}_2.fastq \
+    ${CD}/${i}_1_paired.fastq ${CD}/${i}_1_unpaired.fastq \
+    ${CD}/${i}_2_paired.fastq ${CD}/${i}_2_unpaired.fastq \
+    ILLUMINACLIP:AdaptersToTrim_All.fa:2:35:10 HEADCROP:10 LEADING:30 TRAILING:30 SLIDINGWINDOW:6:30 MINLEN:36
 
-    ### view: convert the SAM file into a BAM file  -bS: BAM is the binary format corresponding to the SAM text format.
-    ### sort: convert the BAM file to a sorted BAM file.
-    ### Example Input: SRR629651.sam; Output: SRR629651_sorted.bam
-  samtools view -@ 6 -bS "$i".sam > "$i".bam
+    # FastQC on cleaned paired reads
+    fastqc ${CD}/${i}_1_paired.fastq --outdir=${WD}/${PCQ}
+    fastqc ${CD}/${i}_2_paired.fastq --outdir=${WD}/${PCQ}
 
-    ###  This is sorting the bam, using 6 threads, and producing a .bam file that includes the word 'sorted' in the name
-  samtools sort -@ 6  "$i".bam  -o  "$i"_sorted.bam
+done < list
 
-    ### Index the BAM and get mapping statistics, and put them in a text file for us to look at.
-  samtools flagstat   "$i"_sorted.bam   > "$i"_Stats.txt
-
-  ### Stringtie is the program that counts the reads that are mapped to each gene, exon, transcript model. 
-  ### The output from StringTie are counts folders in a directory that is ready to bring into the R program Ballgown to 
-  ### Original: This will make transcripts using the reference geneome as a guide for each sorted.bam
-  ### eAB options: This will run stringtie once and  ONLY use the Ref annotation for counting readsto genes and exons 
-  
-mkdir "${COUNTSD}"/"$i"
-stringtie -p 6 -e -B -G  "${REFD}"/"${REF}".gtf -o "${COUNTSD}"/"$i"/"$i".gtf -l "$i"   "${MAPD}"/"$i"_sorted.bam
-done<list
-
-#####################  Copy Results to home Directory.  These will be the files you want to bring back to your computer.
-### these are your stats files from Samtools
-cp *.txt ${RESULTSD}
-
-### The prepDE.py3 is a python script that converts the files in your ballgown folder to a count matrix. 
- ## Move to the counts directory
-cd ${COUNTSD}
- ## run the python script prepDE.py3 to prepare you data for downstream analysis.
-cp /home/${MyID}/graze_class/prepDE.py3 .
-
- prepDE.py3 -i ${COUNTSD}
-
-### copy the final results files (the count matricies that are .csv) to your home directory. 
-cp *.csv ${RESULTSD}
-## move these results files to your personal computer for downstream statistical analyses in R studio.
+# Compress FastQC results
+cd ${WD}
+tar -czvf ${PCQ}.tar.gz ${PCQ}
