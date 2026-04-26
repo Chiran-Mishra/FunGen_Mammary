@@ -1,6 +1,6 @@
 #!/bin/bash
 
-######## FunGen Course Instructions ############
+####################
 ## Purpose: The purpose of this script is to trim sequencing adapters and low quality regions from the sequence read data with Trimmomatic,
 ##       and then use FASTQC to evaluate the quality of the data: https://www.bioinformatics.babraham.ac.uk/projects/fastqc/
 ## Trimmomatic: http://www.usadellab.org/cms/?page=trimmomatic
