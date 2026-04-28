@@ -31,12 +31,12 @@ source /apps/profiles/modules_asax.sh.dyn
 module load trimmomatic/0.39
 module load fastqc/0.10.1
 
-# Define variables
+# Define variables (ONLY changed these)
 MyID=aubclsf0047
 WD=/scratch/${MyID}/Project
-DD=/scratch/${MyID}/Project/rawfile/extra_1
-CD=/scratch/${MyID}/Project/CleanData_Normal
-PCQ=PostCleanQuality
+DD=/scratch/${MyID}/Project/rawfile/extra_2        # tumor raw files
+CD=/scratch/${MyID}/Project/CleanData_Tumor        # tumor clean output
+PCQ=PostCleanQuality_Tumor                         # tumor QC folder
 
 # Create output directories
 mkdir -p ${CD}
